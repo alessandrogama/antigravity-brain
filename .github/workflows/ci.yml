@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.8", "3.10", "3.12"]
+        python-version: ["3.10", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -53,44 +53,44 @@ jobs:
       - name: brain (help screen)
         run: python src/brain_scan.py
         env:
-          BRAIN_FILE: /tmp/brain_ci.json
+          BRAIN_FILE: brain_ci.json
 
       - name: brain clear (no-op on empty)
         run: python src/brain_scan.py clear
         env:
-          BRAIN_FILE: /tmp/brain_ci.json
+          BRAIN_FILE: brain_ci.json
 
       - name: brain add node
         run: python src/brain_scan.py add "CI-Test" "Added by CI" "tech"
         env:
-          BRAIN_FILE: /tmp/brain_ci_add.json
+          BRAIN_FILE: brain_ci_add.json
 
       - name: brain projects (empty)
         run: python src/brain_scan.py projects
         env:
-          BRAIN_FILE: /tmp/brain_ci.json
+          BRAIN_FILE: brain_ci.json
 
       - name: brain register (current dir)
         run: python src/brain_scan.py register ci-test .
         env:
-          BRAIN_FILE: /tmp/brain_ci.json
+          BRAIN_FILE: brain_ci.json
 
       - name: Validate brain.json schema
+        shell: python
         run: |
-          python -c "
           import json, sys, os
           path = os.environ.get('BRAIN_FILE', 'brain.json')
           if not os.path.exists(path):
-              print('brain.json not found, skipping')
+              print(f'File not found: {path}')
               sys.exit(0)
-          data = json.load(open(path))
+          with open(path, encoding='utf-8') as f:
+              data = json.load(f)
           assert isinstance(data.get('nodes'), list), 'nodes must be a list'
           assert isinstance(data.get('edges'), list), 'edges must be a list'
           assert isinstance(data.get('meta'), dict), 'meta must be a dict'
-          print(f'brain.json valid: {len(data[\"nodes\"])} nodes, {len(data[\"edges\"])} edges')
-          "
+          print('brain.json valid: {} nodes, {} edges'.format(len(data['nodes']), len(data['edges'])))
         env:
-          BRAIN_FILE: /tmp/brain_ci_add.json
+          BRAIN_FILE: brain_ci_add.json
 
   security:
     name: Security (pip-audit)
