@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff
+        run: ruff check src/brain_scan.py
+
+  test:
+    name: Test (Python ${{ matrix.python-version }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: lint
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.8", "3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Syntax check
+        run: python -m py_compile src/brain_scan.py
+
+      - name: brain --version
+        run: python src/brain_scan.py --version
+
+      - name: brain (help screen)
+        run: python src/brain_scan.py
+        env:
+          BRAIN_FILE: /tmp/brain_ci.json
+
+      - name: brain clear (no-op on empty)
+        run: python src/brain_scan.py clear
+        env:
+          BRAIN_FILE: /tmp/brain_ci.json
+
+      - name: brain add node
+        run: python src/brain_scan.py add "CI-Test" "Added by CI" "tech"
+        env:
+          BRAIN_FILE: /tmp/brain_ci_add.json
+
+      - name: brain projects (empty)
+        run: python src/brain_scan.py projects
+        env:
+          BRAIN_FILE: /tmp/brain_ci.json
+
+      - name: brain register (current dir)
+        run: python src/brain_scan.py register ci-test .
+        env:
+          BRAIN_FILE: /tmp/brain_ci.json
+
+      - name: Validate brain.json schema
+        run: |
+          python -c "
+          import json, sys, os
+          path = os.environ.get('BRAIN_FILE', 'brain.json')
+          if not os.path.exists(path):
+              print('brain.json not found, skipping')
+              sys.exit(0)
+          data = json.load(open(path))
+          assert isinstance(data.get('nodes'), list), 'nodes must be a list'
+          assert isinstance(data.get('edges'), list), 'edges must be a list'
+          assert isinstance(data.get('meta'), dict), 'meta must be a dict'
+          print(f'brain.json valid: {len(data[\"nodes\"])} nodes, {len(data[\"edges\"])} edges')
+          "
+        env:
+          BRAIN_FILE: /tmp/brain_ci_add.json
+
+  security:
+    name: Security (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit dependencies
+        run: pip-audit -r requirements.txt
