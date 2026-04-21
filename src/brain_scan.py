@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import itertools
 import json
 import logging
 import os
@@ -30,11 +31,9 @@ import sys
 import tempfile
 import threading
 import time
-import itertools
 import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
@@ -105,7 +104,7 @@ class Config:
         self.max_files  = max_files
 
     @classmethod
-    def from_env(cls, brain_file: Path, max_files: int = MAX_FILES) -> "Config":
+    def from_env(cls, brain_file: Path, max_files: int = MAX_FILES) -> Config:
         return cls(
             brain_file=brain_file,
             api_key=os.environ.get("GEMINI_API_KEY", ""),
@@ -236,12 +235,12 @@ def scan_directory(root: Path, max_files: int = MAX_FILES) -> tuple[str, int]:
     for dirpath, dirnames, filenames in os.walk(root):
         # Modify dirnames in-place to skip ignored directories
         dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS]
-        
+
         for f in filenames:
             path = Path(dirpath) / f
             if path.suffix not in EXTENSIONS:
                 continue
-            
+
             # block symlinks pointing outside root (path traversal)
             if path.is_symlink():
                 try:
@@ -271,7 +270,7 @@ def _dir_snapshot(root: Path) -> dict[str, float]:
     """Returns {relative_path: mtime} for all tracked files."""
     root = root.resolve()
     snap: dict[str, float] = {}
-    
+
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in IGNORE_DIRS]
         for f in filenames:
@@ -298,14 +297,19 @@ def classify_with_gemini(summary: str, config: Config) -> dict:
     prompt = (
         "You are a software project analysis assistant.\n\n"
         "Analyze the file summary below and return a JSON with:\n"
-        '- "nodes": list of {id (unique int), label (str ≤64), type (str), desc (str ≤120, in English)}\n'
+        '- "nodes": list of {id (int), label (str), '
+        'type (str), desc (str, in English)}\n'
         '- "edges": list of pairs [source_id, target_id]\n\n'
         "Rules:\n"
-        "1. Group similar files into representative nodes — do NOT create one node per file\n"
-        "2. Identify architectural patterns: Clean Arch, DDD, MVC, layers, domains\n"
-        f"3. Use ONLY these types: {', '.join(sorted(VALID_TYPES))}\n"
+        "1. Group similar files into representative nodes"
+        " -- do NOT create one node per file\n"
+        "2. Identify architectural patterns: "
+        "Clean Arch, DDD, MVC, layers, domains\n"
+        f"3. Use ONLY these types: "
+        f"{', '.join(sorted(VALID_TYPES))}\n"
         "4. Create edges only for real dependencies\n"
-        "5. Return ONLY valid JSON — no markdown fences, no extra text\n\n"
+        "5. Return ONLY valid JSON "
+        "-- no markdown fences, no extra text\n\n"
         f"PROJECT SUMMARY:\n{summary}"
     )
 
@@ -379,7 +383,7 @@ class Spinner:
         self.message = message
         self.done = False
         self.spinner = itertools.cycle(["-", "\\", "|", "/"])
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
 
     def _spin(self) -> None:
         try:
@@ -390,7 +394,7 @@ class Spinner:
         except Exception:
             pass
 
-    def __enter__(self) -> "Spinner":
+    def __enter__(self) -> Spinner:
         self.done = False
         sys.stderr.write(f"\r- {self.message}")
         sys.stderr.flush()
@@ -464,8 +468,14 @@ def build_parser() -> argparse.ArgumentParser:
             "  brain clear\n"
         ),
     )
-    parser.add_argument("--output",    default=None, help="Path to brain.json (default: ./brain.json or $BRAIN_FILE)")
-    parser.add_argument("--max-files", type=int, default=MAX_FILES, help=f"Max files to scan (default: {MAX_FILES})")
+    parser.add_argument(
+        "--output", default=None,
+        help="Path to brain.json (default: ./brain.json or $BRAIN_FILE)",
+    )
+    parser.add_argument(
+        "--max-files", type=int, default=MAX_FILES,
+        help=f"Max files to scan (default: {MAX_FILES})",
+    )
     parser.add_argument("--version",   action="version", version=f"brain {VERSION}")
 
     sub = parser.add_subparsers(dest="command", metavar="command")
@@ -576,7 +586,7 @@ def _print_help(brain_file: Path, proj_file: Path) -> int:
     return 0
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser     = build_parser()
     args       = parser.parse_args(argv)
     brain_file = _resolve_brain_file(args)
@@ -672,7 +682,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not projects:
             log.info("ℹ️  No registered projects to scan.")
             return 0
-        
+
         try:
             config = Config.from_env(brain_file=brain_file, max_files=args.max_files)
         except APIKeyMissingError as exc:
@@ -680,7 +690,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 1
 
         log.info("\n🧠 Antigravity Second Brain  v%s — Scanning all projects", VERSION)
-        
+
         total_added_nodes = 0
         total_added_edges = 0
         try:
@@ -689,7 +699,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 if not path.is_dir():
                     log.error("❌ Skipping '%s': Folder not found: %s", name, path)
                     continue
-                
+
                 log.info("\n📂 Scanning project '%s': %s", name, path)
                 try:
                     brain, added_nodes, added_edges = run_scan(path, config)
@@ -702,11 +712,17 @@ def main(argv: Optional[list[str]] = None) -> int:
             log.info("\n✅ All scans completed.")
         except KeyboardInterrupt:
             log.info("\n\n⏹️  Scan aborted by user.")
-        log.info("   Total added: +%d node(s), +%d edge(s)", total_added_nodes, total_added_edges)
-        
+        log.info(
+            "   Total added: +%d node(s), +%d edge(s)",
+            total_added_nodes, total_added_edges,
+        )
+
         final_brain = load_brain(brain_file)
-        log.info("   Final Brain Size: %d nodes · %d edges", len(final_brain["nodes"]), len(final_brain["edges"]))
-        log.info("   Open brain_viewer.html in your browser and load brain.json ✨\n")
+        log.info(
+            "   Final Brain Size: %d nodes / %d edges",
+            len(final_brain["nodes"]), len(final_brain["edges"]),
+        )
+        log.info("   Run 'brain view' to visualize\n")
         return 0
 
     # ── config (needed for scan + watch) ──────────────────────────
