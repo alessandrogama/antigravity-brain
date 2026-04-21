@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Antigravity Second Brain — .gitignore
+# Repository is PUBLIC. Everything sensitive must be blocked here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Personal data (NEVER commit these) ───────────────────────────────────────
+brain.json
+projects.json
+*.corrupted.json
+
+# ── Credentials & secrets ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# Bash/Zsh rc backups that setup.sh creates (contain API key)
+*.bashrc.bak
+*.zshrc.bak
+*.bash_profile.bak
+.bashrc.bak
+.zshrc.bak
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+.env/
+*.egg-info/
+dist/
+build/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ── OS & editor artifacts ─────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── Logs & temp files ─────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ── Node.js (if project ever adds a web build step) ───────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Coverage & testing artifacts ──────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

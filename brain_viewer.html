@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Second Brain — Antigravity</title>
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<div id="error-overlay" class="hidden">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="logo-dot" style="width:12px;height:12px"></div>
+    <div class="error-title" id="err-title">Second Brain</div>
+  </div>
+  <div class="error-sub">
+    <span id="err-sub1">Could not load <strong>brain.json</strong> automatically.</span><br><br>
+    <span id="err-sub2">This usually happens due to browser security restrictions (CORS) when opening local files directly (<code>file:///</code>).</span><br><br>
+    <span id="err-sub3">To fix this, run the following command in your terminal at the project root and go to <strong>http://localhost:8000/brain_viewer.html</strong>:</span><br><br>
+    <code style="background:var(--bg3);padding:8px 12px;border-radius:4px;color:var(--accent2);display:inline-block;margin-top:8px;">python3 -m http.server 8000</code>
+  </div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <span id="txt-title">Second Brain</span>
+  </div>
+
+  <div class="search-wrap">
+    <svg class="search-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+    <input type="text" id="search" placeholder="Buscar nó..." oninput="onSearch(this.value)" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+
+  <div class="header-stats">
+    <div class="stat"><span id="lbl-nodes" style="color:var(--muted)">nodes</span> <span id="stat-nodes">0</span></div>
+    <div class="stat"><span id="lbl-edges" style="color:var(--muted)">edges</span> <span id="stat-edges">0</span></div>
+    <div class="stat"><span id="lbl-selected" style="color:var(--muted)">selected</span> <span id="stat-selected">—</span></div>
+    <div class="lang-selector">
+      <select id="lang-select" onchange="changeLang(this.value)">
+        <option value="en" selected>English</option>
+        <option value="es">Español</option>
+        <option value="pt">Português</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div id="canvas-wrap">
+    <canvas id="c"></canvas>
+    <div id="tooltip"></div>
+    <div id="zoom-indicator">100%</div>
+  </div>
+
+  <aside>
+    <div class="aside-section">
+      <div class="aside-label" id="lbl-legend">Legend</div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="aside-section">
+      <div class="aside-label" id="lbl-controls">Controls</div>
+      <div class="controls">
+        <button class="ctrl-btn" id="btn-reset" onclick="resetView()">↺ Reset camera</button>
+        <button class="ctrl-btn" id="btn-reload" onclick="fetchBrainJson()">⤓ Reload Graph</button>
+        <button class="ctrl-btn" id="btn-fit" onclick="fitAll()">⊞ Fit all</button>
+        <button class="ctrl-btn" onclick="togglePhysics()">⏸ <span id="physics-label">Pause physics</span></button>
+      </div>
+    </div>
+
+    <div id="node-detail">
+      <div class="detail-empty" id="txt-empty">← Click a node<br>to view details</div>
+    </div>
+  </aside>
+</div>
+
+<script src="assets/js/script.js"></script>
+</body>
+</html>
