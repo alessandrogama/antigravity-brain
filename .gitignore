@@ -20,6 +20,9 @@ projects.json
 .bashrc.bak
 .zshrc.bak
 
+# Windows PowerShell profile backups
+Microsoft.PowerShell_profile.ps1.bak
+
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

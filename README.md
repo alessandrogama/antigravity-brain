@@ -6,96 +6,164 @@ We built this specifically to feed contextual architecture data into the Antigra
 
 ## How it works under the hood
 
-1. **Scanner**: It traverses your project and extracts imports, exports, and dependencies (supports 15+ languages).
-2. **Classifier**: It sends a minimal summary to the Gemini API (`google-genai`) to group files into concepts, tech stacks, and domains.
-3. **Graph**: The result is compiled into a lightweight `brain.json` file.
-4. **Viewer**: Open `brain_viewer.html` in your browser to see a local, force-directed graph of your project.
+1. **Scanner**: Traverses your project and extracts imports and dependencies (supports 15+ languages).
+2. **Classifier**: Sends a minimal summary to the Gemini API to group files into concepts, tech stacks, and domains.
+3. **Graph**: Compiles the result into a lightweight `brain.json` file.
+4. **Viewer**: Open `brain_viewer.html` in your browser to see a force-directed graph of your project.
 
 ## Requirements
 
 - Python 3.8+
 - A free Gemini API key from [Google AI Studio](https://aistudio.google.com/)
 
-## Step-by-Step Setup
+---
 
-1. **Clone the repo**
-   ```bash
-   git clone https://github.com/alessandrogama/antigravity-brain
-   cd antigravity-brain
-   ```
+## Setup — Linux / macOS / WSL
 
-2. **Run the setup script**
-   This script will install the required Python packages, ask for your API key, and configure the `brain` terminal alias.
-   ```bash
-   bash setup.sh
-   ```
+```bash
+git clone https://github.com/alessandrogama/antigravity-brain
+cd antigravity-brain
+bash setup.sh
+source ~/.bashrc
+```
 
-3. **Reload your shell**
-   ```bash
-   source ~/.bashrc
-   ```
+The setup script will install dependencies, ask for your API key, and create the `brain` shell alias automatically.
+
+---
+
+## Setup — Windows (PowerShell)
+
+```powershell
+git clone https://github.com/alessandrogama/antigravity-brain
+cd antigravity-brain
+
+# Allow local scripts to run (only needed once)
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned -Force
+
+# Run the installer
+.\install.ps1
+```
+
+The installer will:
+1. Create the `.venv` and install dependencies
+2. Add the project folder to your user PATH (permanent)
+3. Add a `brain` function to your PowerShell profile (permanent)
+4. Ask for your Gemini API key and save it to your user environment
+
+After install, reload your profile and test it:
+
+```powershell
+. $PROFILE
+brain
+```
+
+If you skipped the API key during install, set it manually:
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "your-key-here", "User")
+```
+
+---
 
 ## Usage
 
-Navigate to any project you want to map out and run the scan command. 
+Type `brain` alone to see your graph status and all available commands.
 
 ```bash
 # Scan the current directory
 brain scan .
 
-# Run a scan and limit it to 40 core files (good for huge projects)
+# Scan a specific project folder
+brain scan ~/projects/my-api
+
+# Scan all registered projects at once
+brain scan-all
+
+# Open the graph viewer in your browser (starts server automatically)
+brain view
+
+# Watch mode -- re-scans automatically when files change
+brain watch .
+
+# Limit scan to 40 files (good for large projects)
 brain scan . --max-files 40
 
-# Add a project to your local registry for quick access
+# Register a project by name for quick access
 brain register my-api ~/projects/backend
+
+# Scan a registered project by name
+brain use my-api
+
+# List all registered projects
+brain projects
+
+# Add a manual node (tech, person, resource, etc.)
+brain add "Redis" "Used for session caching" "tech"
+
+# Reset brain.json and start fresh
+brain clear
 ```
 
-### Visualizing the Graph
+---
 
-Since the viewer is a local HTML file, some browsers block loading local JSON files due to CORS. The easiest way to view your graph is to start a quick local server in the project folder:
+## Visualizing the Graph
+
+Run this command from any terminal and it will start a local server and open the browser automatically:
 
 ```bash
-python3 -m http.server 8000
+brain view
 ```
-Then open `http://localhost:8000/brain_viewer.html` in your browser.
+
+This works on Windows, Linux, macOS, and WSL. It always serves from the correct project directory regardless of where you run the command from.
+
+The viewer supports English, Spanish, and Portuguese (selector in the top-right corner).
+
+---
 
 ## Using it with Antigravity IDE
 
-If you want to use the generated graph with Antigravity IDE, you have two options:
+**Option A (Recommended):** Go to IDE settings and paste the contents of `prompts/AGENT_PROMPT.md` into the System Prompt.
 
-**Option A (Recommended):** Go to your IDE settings and paste the contents of `prompts/AGENT_PROMPT.md` into the System Prompt.
+**Option B:** Drag and drop `prompts/AGENT_PROMPT.md` into the chat at the start of each session.
 
-**Option B:** Just drag and drop `prompts/AGENT_PROMPT.md` into the chat window when starting a new session.
+Once loaded, the IDE will automatically consult your project's architecture before proposing code changes and show an impact plan before editing any file.
 
-Once loaded, the IDE will automatically run `brain scan` in the background and consult your project's architecture before proposing code changes. It also forces the IDE to show you an impact plan before it edits files.
+---
 
 ## Adding manual context
 
-The scanner does a good job mapping code, but sometimes you want to add abstract context (like a product rule, a specific person, or a cloud resource). You can inject these directly into the graph:
+The scanner maps code well, but you can also inject abstract context directly:
 
 ```bash
-brain add "Redis" "Used for session caching" "tech"
-brain add "John Doe" "DevOps lead" "person"
+brain add "Redis" "Session cache" "tech"
+brain add "John" "DevOps lead" "person"
+brain add "Stripe" "Payment gateway" "resource"
 ```
+
+Valid node types: `project`, `tech`, `concept`, `person`, `resource`, `file`
+
+---
 
 ## Supported Languages
 
-The local AST scanner currently extracts import/dependency statements from:
-`Dart`, `Python`, `JS/TS`, `Vue`, `PHP`, `C#`, `Java`, `Kotlin`, `Go`, `Rust`, `Swift`, `Elixir`, `C/C++`, `Markdown` (wikilinks), and standard `JSON/YAML` config files.
+`Dart`, `Python`, `JS/TS`, `Vue`, `PHP`, `C#`, `Java`, `Kotlin`, `Go`, `Rust`, `Swift`, `Elixir`, `C/C++`, `Markdown` (wikilinks), `JSON/YAML`
+
+---
 
 ## Security & Privacy
 
-- `brain.json` and `projects.json` are strictly local and added to `.gitignore`.
-- Your Gemini API key is never printed in logs or sent anywhere besides Google's servers.
-- The scanner respects `.gitignore` out of the box and has built-in protection against path traversal via symlinks.
-- We never automatically commit any AI-generated files.
+- `brain.json` and `projects.json` are local-only and in `.gitignore` — never committed.
+- Your Gemini API key is never printed in logs or committed to the repo.
+- The scanner blocks symlinks that point outside the project root (path traversal prevention).
+
+---
 
 ## Contributing
 
-Feel free to open issues or PRs. Some things on the roadmap:
-- Exporting the graph directly to Obsidian (`.md` files with frontmatter)
-- Proper monorepo support (multiple `brain.json` files per sub-project)
-- A dedicated VS Code extension
+Open issues or PRs. Things on the roadmap:
+- Exporting to Obsidian native format (`.md` with frontmatter)
+- Monorepo support (multiple `brain.json` per sub-project)
+- VS Code extension
 
 ## License
 

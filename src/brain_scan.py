@@ -24,11 +24,14 @@ import logging
 import os
 import re
 import shutil
+import socket
+import subprocess
 import sys
 import tempfile
 import threading
 import time
 import itertools
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -498,6 +501,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_reg.add_argument("name", help="Project name")
     p_reg.add_argument("path", nargs="?", default=".", help="Project folder (default: .)")
 
+    # brain view
+    sub.add_parser("view", help="Start local server and open the graph viewer in browser")
+
     # brain clear
     sub.add_parser("clear", help="Reset brain.json")
 
@@ -511,12 +517,105 @@ def _resolve_projects_file(brain_file: Path) -> Path:
     return brain_file.parent / "projects.json"
 
 
+def _print_help(brain_file: Path, proj_file: Path) -> int:
+    """Prints a rich welcome banner and command reference."""
+    # Fix Unicode encoding on Windows terminals
+    if sys.platform == "win32":
+        with contextlib.suppress(AttributeError):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+    brain    = load_brain(brain_file)
+    projects = load_projects(proj_file)
+    n_nodes  = len(brain["nodes"])
+    n_edges  = len(brain["edges"])
+    n_proj   = len(projects)
+    last_scan = brain.get("meta", {}).get("last_scan", "never")
+    if last_scan != "never":
+        try:
+            dt = datetime.fromisoformat(last_scan)
+            last_scan = dt.strftime("%Y-%m-%d %H:%M UTC")
+        except Exception:
+            pass
+
+    W  = "\033[1;37m"   # bold white
+    C  = "\033[0;36m"   # cyan
+    G  = "\033[0;32m"   # green
+    Y  = "\033[1;33m"   # yellow
+    DM = "\033[2m"      # dim
+    R  = "\033[0m"      # reset
+    AC = "\033[0;35m"   # accent (purple)
+
+    print(f"""
+{AC}  +==========================================+{R}
+{AC}  |  {W}Antigravity Second Brain  v{VERSION}{AC}          |{R}
+{AC}  +==========================================+{R}
+
+{DM}  Knowledge graph powered by Gemini AI{R}
+
+  {W}Brain Status{R}
+  {DM}------------------------------------------{R}
+  Nodes      {G}{n_nodes:>6}{R}    Edges      {G}{n_edges:>6}{R}
+  Projects   {G}{n_proj:>6}{R}    Last scan  {DM}{last_scan}{R}
+
+  {W}Commands{R}
+  {DM}------------------------------------------{R}
+  {C}brain scan .{R}                   Scan current folder
+  {C}brain scan ~/projects/my-app{R}   Scan a specific folder
+  {C}brain scan-all{R}                 Scan all registered projects
+  {C}brain watch .{R}                  Auto-scan on file changes
+  {C}brain use {Y}<name>{R}               Scan a registered project
+  {C}brain projects{R}                 List all registered projects
+  {C}brain register {Y}<name> <path>{R}   Register a project folder
+  {C}brain add {Y}'Label' 'Desc' type'{R}  Add a node manually
+  {C}brain view{R}                     Open graph viewer in browser
+  {C}brain clear{R}                    Reset brain.json
+  {C}brain --version{R}                Show version
+
+  {W}Node types{R}  {DM}project tech concept person resource file{R}
+""")
+    return 0
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser     = build_parser()
     args       = parser.parse_args(argv)
     brain_file = _resolve_brain_file(args)
     proj_file  = _resolve_projects_file(brain_file)
-    command    = args.command or "scan"   # default to scan if no subcommand
+    command    = args.command
+
+    # ── no subcommand → show help screen ──────────────────────────
+    if not command:
+        return _print_help(brain_file, proj_file)
+
+    # ── view ──────────────────────────────────────────────────
+    if command == "view":
+        # Always serve from the project root (where brain_viewer.html lives),
+        # regardless of what directory the user is in when they run the command.
+        serve_dir = Path(__file__).parent.parent.resolve()
+        # find a free port starting at 8000
+        port = 8000
+        for p in range(8000, 8010):
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(("localhost", p)) != 0:
+                    port = p
+                    break
+        url = f"http://localhost:{port}/brain_viewer.html"
+        log.info("\n  Starting server at %s", url)
+        log.info("  Press Ctrl+C to stop\n")
+        server = subprocess.Popen(
+            [sys.executable, "-m", "http.server", str(port)],
+            cwd=serve_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(0.8)   # let server spin up
+        webbrowser.open(url)
+        try:
+            server.wait()
+        except KeyboardInterrupt:
+            server.terminate()
+            log.info("\n  Server stopped.")
+        return 0
 
     # ── clear ─────────────────────────────────────────────────────
     if command == "clear":
