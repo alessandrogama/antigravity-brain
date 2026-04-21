@@ -1,6 +1,6 @@
 const COLORS = {
-  project:  '#8b5cf6',
-  tech:     '#3b82f6',
+  project:  '#3b82f6',
+  tech:     '#8b5cf6',
   concept:  '#f59e0b',
   person:   '#f43f5e',
   resource: '#06b6d4',
@@ -9,22 +9,22 @@ const COLORS = {
 
 const I18N = {
   en: {
-    nodes: "nodes", edges: "edges", filter: "FILTER BY TYPE", all: "ALL NODES",
-    reset: "Reset", freeze: "Freeze", resume: "Resume", selectNode: "Select a node to explore neural connections",
-    connected: "CONNECTED TO", noDesc: "No description available.",
-    errTitle: "CONNECTION LOST", errSub: "Could not load brain.json. Make sure the server is running."
+    projects: "PROJECTS", tags: "TAGS", nodes: "Nodes", sync: "ENCRYPTED",
+    connected: "CONNECTIONS", noDesc: "No data available.",
+    errTitle: "CONNECTION LOST", errSub: "Verify local Cerebrum instance status.",
+    assistant: ["Analyzing thought patterns...", "Scanning neural pathways...", "Index complete.", "New connection detected."]
   },
   pt: {
-    nodes: "nós", edges: "conexões", filter: "FILTRAR POR TIPO", all: "TODOS",
-    reset: "Resetar", freeze: "Pausar", resume: "Retomar", selectNode: "Selecione um nó para explorar as conexões",
-    connected: "CONECTADO A", noDesc: "Sem descrição disponível.",
-    errTitle: "CONEXÃO PERDIDA", errSub: "Não foi possível carregar brain.json. Verifique se o servidor está rodando."
+    projects: "PROJETOS", tags: "TAGS", nodes: "Nós", sync: "CRIPTOGRAFADO",
+    connected: "CONEXÕES", noDesc: "Sem dados disponíveis.",
+    errTitle: "CONEXÃO PERDIDA", errSub: "Verifique o status da instância local.",
+    assistant: ["Analisando padrões de pensamento...", "Escaneando caminhos neurais...", "Índice completo.", "Nova conexão detectada."]
   },
   es: {
-    nodes: "nodos", edges: "conexiones", filter: "FILTRAR POR TIPO", all: "TODOS",
-    reset: "Reiniciar", freeze: "Pausar", resume: "Reanudar", selectNode: "Selecciona um nodo para explorar conexiones",
-    connected: "CONECTADO A", noDesc: "Sin descripción disponible.",
-    errTitle: "CONEXIÓN PERDIDA", errSub: "No se pudo cargar brain.json. Asegúrate de que el servidor esté funcionando."
+    projects: "PROYECTOS", tags: "TAGS", nodes: "Nodos", sync: "ENCRIPTADO",
+    connected: "CONEXIONES", noDesc: "Sin datos disponibles.",
+    errTitle: "CONEXIÓN PERDIDA", errSub: "Verifique o estado da instância local.",
+    assistant: ["Analizando patrones de pensamiento...", "Escaneando rutas neurales...", "Índice completo.", "Nueva conexão detectada."]
   }
 };
 
@@ -34,19 +34,23 @@ function t(key) { return I18N[currentLang][key]; }
 window.changeLang = function(lang) {
   currentLang = lang;
   const el = (id) => document.getElementById(id);
-  if(el('lbl-nodes')) el('lbl-nodes').textContent = t('nodes');
-  if(el('lbl-edges')) el('lbl-edges').textContent = t('edges');
-  if(el('lbl-legend')) el('lbl-legend').textContent = t('filter');
-  if(el('btn-reset')) el('btn-reset').textContent = t('reset');
-  if(el('physics-label')) el('physics-label').textContent = physicsOn ? t('freeze') : t('resume');
-  if(el('txt-empty')) el('txt-empty').textContent = t('selectNode');
+  if(el('lbl-vault')) el('lbl-vault').textContent = t('projects');
+  if(el('lbl-tags')) el('lbl-tags').textContent = t('tags');
   if(el('msg-error')) el('msg-error').textContent = t('errSub');
-  
+  const assistantMsg = t('assistant')[Math.floor(Math.random() * t('assistant').length)];
+  if(el('assistant-text')) el('assistant-text').textContent = assistantMsg;
   buildLegend();
   renderDetail(selected ? nodeMap[selected] : null);
 }
 
-// ─── State ───────────────────────────────────────────────────────────────
+window.toggleSection = function(id) {
+  const el = document.getElementById(id);
+  if(!el) return;
+  const isHidden = el.style.display === 'none';
+  el.style.display = isHidden ? 'block' : 'none';
+  el.previousElementSibling.classList.toggle('collapsed', !isHidden);
+}
+
 let nodes = [], edges = [], selected = null;
 let nodeMap = {};
 let camX = 0, camY = 0, camZoom = 1;
@@ -58,281 +62,263 @@ let filterType = null;
 let animFrame;
 
 const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 const wrap = document.getElementById('canvas-wrap');
+
+const mCanvas = document.getElementById('minimap-canvas');
+const mCtx = mCanvas ? mCanvas.getContext('2d') : null;
 
 function initBrain(data) {
   nodes = (data.nodes || []).map(n => ({...n, x: 0, y: 0}));
   edges = data.edges || [];
-  
   nodeMap = {};
-  nodes.forEach(n => { 
-    vx[n.id] = 0; vy[n.id] = 0; 
-    nodeMap[n.id] = n;
-  });
+  nodes.forEach(n => { vx[n.id] = 0; vy[n.id] = 0; nodeMap[n.id] = n; });
   selected = null;
-
+  
+  handleResize();
   scatter();
   buildLegend();
   updateStats();
+  updateSidebar();
   renderDetail(null);
   
   const errOverlay = document.getElementById('error-overlay');
   if (errOverlay) errOverlay.classList.add('hidden');
-
+  
   cancelAnimationFrame(animFrame);
   loop();
+  
+  // Forçar centralização após 200ms (quando o layout CSS estiver 100% pronto)
+  setTimeout(() => {
+    handleResize();
+    scatter();
+  }, 200);
+}
+
+function handleResize() {
+  if(!canvas || !wrap) return;
+  const rect = wrap.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
 }
 
 function scatter() {
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  const cx = w/2, cy = h/2;
+  const w = canvas.width || 800;
+  const h = canvas.height || 600;
   nodes.forEach((n, i) => {
     const angle = (i / nodes.length) * Math.PI * 2;
-    const r = Math.min(w, h) * 0.25;
-    n.x = cx + Math.cos(angle) * r * (0.8 + Math.random() * 0.4);
-    n.y = cy + Math.sin(angle) * r * (0.8 + Math.random() * 0.4);
-    vx[n.id] = 0; vy[n.id] = 0;
+    const r = Math.min(w, h) * 0.3;
+    n.x = w/2 + Math.cos(angle) * r;
+    n.y = h/2 + Math.sin(angle) * r;
   });
   camX = 0; camY = 0; camZoom = 1;
 }
 
-// ─── Physics ─────────────────────────────────────────────────────────────
 function simulate() {
   if (!physicsOn) return;
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  const REP = 4000, SPRING = 0.03, DAMP = 0.7, TARGET = 70, MAX_SPEED = 20;
+  const w = canvas.width || 800;
+  const h = canvas.height || 600;
+  const REP = 8000, SPRING = 0.04, DAMP = 0.6, TARGET = 100;
 
   nodes.forEach(a => {
     if (isDraggingNode === a.id) return;
     let fx = 0, fy = 0;
-
     nodes.forEach(b => {
       if (a.id === b.id) return;
       const dx = a.x - b.x, dy = a.y - b.y;
-      const d = Math.max(Math.hypot(dx, dy), 1);
-      const force = REP / (d * d);
-      fx += force * dx / d;
-      fy += force * dy / d;
+      const d = Math.sqrt(dx*dx + dy*dy) || 1;
+      const force = Math.min(REP / (d * d), 50);
+      fx += force * dx / d; fy += force * dy / d;
     });
-
     edges.forEach(([ea, eb]) => {
       const other = (ea === a.id) ? nodeMap[eb] : (eb === a.id) ? nodeMap[ea] : null;
       if (!other) return;
       const dx = other.x - a.x, dy = other.y - a.y;
-      const d = Math.max(Math.hypot(dx, dy), 1);
+      const d = Math.sqrt(dx*dx + dy*dy) || 1;
       const force = SPRING * (d - TARGET);
-      fx += force * dx / d;
-      fy += force * dy / d;
+      fx += force * dx / d; fy += force * dy / d;
     });
-
-    // Center Gravity
-    fx += (w/2 - a.x) * 0.005;
-    fy += (h/2 - a.y) * 0.005;
-
+    
+    // Centro dinâmico
+    fx += (w/2 - a.x) * 0.01;
+    fy += (h/2 - a.y) * 0.01;
+    
     vx[a.id] = (vx[a.id] + fx) * DAMP;
     vy[a.id] = (vy[a.id] + fy) * DAMP;
-
-    const speed = Math.hypot(vx[a.id], vy[a.id]);
-    if (speed > MAX_SPEED) {
-      vx[a.id] = (vx[a.id] / speed) * MAX_SPEED;
-      vy[a.id] = (vy[a.id] / speed) * MAX_SPEED;
-    }
-    
-    a.x += vx[a.id];
-    a.y += vy[a.id];
+    a.x += vx[a.id]; a.y += vy[a.id];
   });
 }
 
-// ─── Draw ─────────────────────────────────────────────────────────────────
-function nodeRadius(n) {
+function nodeSize(n) {
   const deg = edges.filter(([a,b]) => a===n.id||b===n.id).length;
-  return 5 + Math.sqrt(deg) * 2.5;
-}
-
-function getColor(type) {
-  return COLORS[type] || '#888';
+  return 8 + Math.sqrt(deg) * 4;
 }
 
 function draw() {
-  const w = wrap.clientWidth, h = wrap.clientHeight;
-  canvas.width = w; canvas.height = h;
-  ctx.clearRect(0, 0, w, h);
-
+  if(!ctx || !canvas) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
   ctx.translate(camX, camY);
   ctx.scale(camZoom, camZoom);
 
   const neighbors = selected ? getNeighbors(selected) : new Set();
 
-  // Edges
-  ctx.lineCap = 'round';
   edges.forEach(([a, b]) => {
-    const na = nodeMap[a];
-    const nb = nodeMap[b];
+    const na = nodeMap[a], nb = nodeMap[b];
     if (!na || !nb) return;
-
-    const visible = !filterType || na.type === filterType || nb.type === filterType;
     const active = selected && (a === selected || b === selected);
-    const dimmed = (filterType && !visible) || (selected && !active);
-
-    if (dimmed) return; // Completely hide dimmed edges for cleaner look
-
+    const dimmed = selected && !active;
+    if (dimmed) return;
     ctx.beginPath();
     ctx.moveTo(na.x, na.y);
     ctx.lineTo(nb.x, nb.y);
-    
-    if (active) {
-      ctx.strokeStyle = getColor(na.type);
-      ctx.globalAlpha = 0.6;
-      ctx.lineWidth = 2;
-    } else {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-      ctx.globalAlpha = 1;
-      ctx.lineWidth = 1;
-    }
+    ctx.strokeStyle = active ? COLORS[na.type || 'concept'] : 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = active ? 2 : 1;
     ctx.stroke();
-    ctx.globalAlpha = 1;
   });
 
-  // Nodes
   nodes.forEach(n => {
-    const r = nodeRadius(n);
-    const color = getColor(n.type);
+    const s = nodeSize(n);
+    const type = n.type || 'concept';
+    const color = COLORS[type] || '#888';
     const isSelected = n.id === selected;
     const isNeighbor = neighbors.has(n.id);
     const typeMatch = !filterType || n.type === filterType;
     const dimmed = (filterType && !typeMatch) || (selected && !isSelected && !isNeighbor);
-
-    if (dimmed) ctx.globalAlpha = 0.1;
-    else ctx.globalAlpha = 1;
-
-    // Glow Effect
-    if (isSelected || (hoverId === n.id)) {
-      ctx.shadowBlur = 15;
+    ctx.globalAlpha = dimmed ? 0.1 : 1;
+    
+    if (isSelected || hoverId === n.id) {
+      ctx.shadowBlur = 20;
       ctx.shadowColor = color;
     }
-
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    
     ctx.fillStyle = color;
-    ctx.fill();
-
-    // Border for neighbor/selected
+    ctx.fillRect(n.x - s/2, n.y - s/2, s, s);
+    
     if (isSelected || isNeighbor) {
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = isSelected ? 3 : 1.5;
-      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeRect(n.x - s/2 - 2, n.y - s/2 - 2, s + 4, s + 4);
     }
+    
+    ctx.shadowBlur = 0;
 
-    ctx.shadowBlur = 0; // Reset shadow
-
-    // Labels
-    if (!dimmed && (camZoom > 0.6 || isSelected || isNeighbor)) {
-      const fontSize = 12;
-      ctx.font = `${isSelected ? '600' : '400'} ${fontSize}px 'Outfit', sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = isSelected ? '#fff' : 'rgba(255,255,255,0.8)';
-      ctx.fillText(n.label, n.x, n.y + r + 6);
+    if (!dimmed && (camZoom > 0.5 || isSelected || isNeighbor)) {
+      ctx.font = `${isSelected?'700':'500'} 10px 'JetBrains Mono'`;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = isSelected ? '#fff' : 'rgba(255,255,255,0.5)';
+      ctx.fillText(n.label, n.x + s/2 + 8, n.y + 3);
     }
   });
-
   ctx.restore();
+  drawMinimap();
 }
 
-function loop() {
-  simulate();
-  draw();
-  animFrame = requestAnimationFrame(loop);
+function drawMinimap() {
+  if(!mCtx || !mCanvas) return;
+  const w = mCanvas.width = 160;
+  const h = mCanvas.height = 80;
+  mCtx.clearRect(0, 0, w, h);
+  const padding = 50;
+  const nodesX = nodes.map(n => n.x);
+  const nodesY = nodes.map(n => n.y);
+  const minX = Math.min(...nodesX) - padding;
+  const maxX = Math.max(...nodesX) + padding;
+  const minY = Math.min(...nodesY) - padding;
+  const maxY = Math.max(...nodesY) + padding;
+  
+  const worldW = maxX - minX;
+  const worldH = maxY - minY;
+  const scale = Math.min(w / worldW, h / worldH) || 0.05;
+  const offX = (w - worldW * scale) / 2;
+  const offY = (h - worldH * scale) / 2;
+  
+  nodes.forEach(n => {
+    mCtx.fillStyle = COLORS[n.type || 'concept'] || '#888';
+    mCtx.fillRect(offX + (n.x - minX) * scale, offY + (n.y - minY) * scale, 1.5, 1.5);
+  });
+  
+  const v = document.getElementById('minimap-viewport');
+  if(v) {
+    const vw = (canvas.width / camZoom) * scale;
+    const vh = (canvas.height / camZoom) * scale;
+    const vx = offX + ((-camX / camZoom) - minX) * scale;
+    const vy = offY + ((-camY / camZoom) - minY) * scale;
+    v.style.width = Math.max(2, Math.min(vw, w)) + 'px';
+    v.style.height = Math.max(2, Math.min(vh, h)) + 'px';
+    v.style.left = Math.min(Math.max(0, vx), w) + 'px';
+    v.style.top = Math.min(Math.max(0, vy), h) + 'px';
+  }
 }
 
-// ─── Input ───────────────────────────────────────────────────────────────
-canvas.addEventListener('wheel', e => {
-  e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  const delta = e.deltaY < 0 ? 1.1 : 0.9;
-  const newZoom = Math.max(0.1, Math.min(5, camZoom * delta));
-  camX = mx - (mx - camX) * (newZoom / camZoom);
-  camY = my - (my - camY) * (newZoom / camZoom);
-  camZoom = newZoom;
-  document.getElementById('zoom-indicator').textContent = Math.round(camZoom * 100) + '%';
-}, { passive: false });
+function loop() { simulate(); draw(); animFrame = requestAnimationFrame(loop); }
 
-canvas.addEventListener('mousedown', e => {
-  const { nx, ny } = screenToWorld(e.clientX, e.clientY);
-  for (const n of nodes) {
-    if (Math.hypot(n.x - nx, n.y - ny) < nodeRadius(n) + 5) {
-      isDraggingNode = n.id;
-      dragOffX = nx - n.x;
-      dragOffY = ny - n.y;
+if(canvas) {
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    const newZoom = Math.max(0.1, Math.min(5, camZoom * delta));
+    camX = mx - (mx - camX) * (newZoom / camZoom);
+    camY = my - (my - camY) * (newZoom / camZoom);
+    camZoom = newZoom;
+    const zi = document.getElementById('zoom-indicator');
+    if(zi) zi.textContent = Math.round(camZoom * 100) + '%';
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', e => {
+    const { nx, ny } = screenToWorld(e.clientX, e.clientY);
+    for (const n of nodes) {
+      const s = nodeSize(n);
+      if (Math.abs(n.x - nx) < s/2 + 5 && Math.abs(n.y - ny) < s/2 + 5) {
+        isDraggingNode = n.id; dragOffX = nx - n.x; dragOffY = ny - n.y; return;
+      }
+    }
+    isPanning = true; panStartX = e.clientX; panStartY = e.clientY;
+    camStartX = camX; camStartY = camY;
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    const { nx, ny } = screenToWorld(e.clientX, e.clientY);
+    if (isDraggingNode !== null) {
+      const n = nodeMap[isDraggingNode];
+      if (n) { n.x = nx - dragOffX; n.y = ny - dragOffY; vx[n.id]=0; vy[n.id]=0; }
       return;
     }
-  }
-  isPanning = true;
-  panStartX = e.clientX; panStartY = e.clientY;
-  camStartX = camX; camStartY = camY;
-});
-
-canvas.addEventListener('mousemove', e => {
-  const { nx, ny } = screenToWorld(e.clientX, e.clientY);
-
-  if (isDraggingNode !== null) {
-    const n = nodeMap[isDraggingNode];
-    if (n) { n.x = nx - dragOffX; n.y = ny - dragOffY; vx[n.id]=0; vy[n.id]=0; }
-    return;
-  }
-
-  if (isPanning) {
-    camX = camStartX + (e.clientX - panStartX);
-    camY = camStartY + (e.clientY - panStartY);
-    return;
-  }
-
-  hoverId = null;
-  for (const n of nodes) {
-    if (Math.hypot(n.x - nx, n.y - ny) < nodeRadius(n) + 5) {
-      hoverId = n.id; break;
+    if (isPanning) {
+      camX = camStartX + (e.clientX - panStartX);
+      camY = camStartY + (e.clientY - panStartY);
+      return;
     }
-  }
-
-  const tt = document.getElementById('tooltip');
-  if (hoverId) {
-    const n = nodeMap[hoverId];
-    tt.style.display = 'block';
-    tt.innerHTML = `<strong>${escapeHTML(n.label)}</strong><br><span style="color:${getColor(n.type)}">${escapeHTML(n.type)}</span>`;
-    tt.style.left = (e.clientX + 15) + 'px';
-    tt.style.top  = (e.clientY + 15) + 'px';
-    canvas.style.cursor = 'pointer';
-  } else {
-    tt.style.display = 'none';
-    canvas.style.cursor = isPanning ? 'grabbing' : 'grab';
-  }
-});
-
-canvas.addEventListener('mouseup', e => {
-  if (isDraggingNode !== null) {
-    const { nx, ny } = screenToWorld(e.clientX, e.clientY);
-    const n = nodeMap[isDraggingNode];
-    if (n && Math.hypot((n.x + dragOffX) - nx, (n.y + dragOffY) - ny) < 5) {
-      focusNode(n.id);
+    hoverId = null;
+    for (const n of nodes) {
+      const s = nodeSize(n);
+      if (Math.abs(n.x - nx) < s/2 + 5 && Math.abs(n.y - ny) < s/2 + 5) { hoverId = n.id; break; }
     }
-    isDraggingNode = null;
-  }
-  isPanning = false;
-});
+    const tt = document.getElementById('tooltip');
+    if (hoverId) {
+      const n = nodeMap[hoverId];
+      tt.style.display = 'block';
+      tt.innerHTML = `<strong>${n.label}</strong><br><span style="color:${COLORS[n.type || 'concept']}">${(n.type||'concept').toUpperCase()}</span>`;
+      tt.style.left = (e.clientX + 15) + 'px'; tt.style.top = (e.clientY + 15) + 'px';
+    } else { if(tt) tt.style.display = 'none'; }
+  });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
-function escapeHTML(str) {
-  if (!str) return '';
-  return String(str).replace(/[&<>'"]/g, t => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[t]));
+  canvas.addEventListener('mouseup', e => {
+    if (isDraggingNode !== null) {
+      const { nx, ny } = screenToWorld(e.clientX, e.clientY);
+      const n = nodeMap[isDraggingNode];
+      if (n && Math.hypot((n.x + dragOffX) - nx, (n.y + dragOffY) - ny) < 5) focusNode(n.id);
+      isDraggingNode = null;
+    }
+    isPanning = false;
+  });
 }
 
 function screenToWorld(sx, sy) {
   const rect = canvas.getBoundingClientRect();
-  return { nx: (sx - rect.left - camX) / camZoom, ny: (sy - rect.top  - camY) / camZoom };
+  return { nx: (sx - rect.left - camX) / camZoom, ny: (sy - rect.top - camY) / camZoom };
 }
 
 function getNeighbors(id) {
@@ -342,30 +328,41 @@ function getNeighbors(id) {
 }
 
 function updateStats() {
-  document.getElementById('stat-nodes').textContent = nodes.length;
-  document.getElementById('stat-edges').textContent = edges.length;
+  const el = document.getElementById('stat-nodes');
+  if(el) el.textContent = nodes.length;
 }
 
-window.resetView = function() {
-  camX = 0; camY = 0; camZoom = 1;
-  document.getElementById('zoom-indicator').textContent = '100%';
-}
-
-window.togglePhysics = function() {
-  physicsOn = !physicsOn;
-  document.getElementById('physics-label').textContent = physicsOn ? t('freeze') : t('resume');
+function updateSidebar() {
+  const projectList = document.getElementById('sub-projects');
+  if(projectList) {
+    // Filter specifically for projects (labels containing '_de_' or known names)
+    const projectNodes = nodes.filter(n => 
+      n.type === 'project' || 
+      n.label.includes('_') || 
+      ['caminho_de_liberdade', 'vida_mestre', 'antigravity-brain'].some(name => n.label.toLowerCase().includes(name))
+    ).slice(0, 20);
+    
+    projectList.innerHTML = projectNodes.map(p => `
+      <div class="item" onclick="focusNode(${p.id})"><span class="icon">📁</span> ${p.label}</div>
+    `).join('') || '<div class="item dim">No projects found</div>';
+  }
+  const tagContainer = document.getElementById('tag-container');
+  if(tagContainer) {
+    const types = [...new Set(nodes.map(n => n.type || 'concept'))];
+    tagContainer.innerHTML = types.map(t => `
+      <div class="tag-item" onclick="setFilter('${t}')">#${t}</div>
+    `).join('');
+  }
 }
 
 window.onSearch = function(q) {
   const box = document.getElementById('search-results');
   if (!q) { box.style.display = 'none'; return; }
   const matches = nodes.filter(n => n.label.toLowerCase().includes(q.toLowerCase()));
-  if (!matches.length) { box.style.display = 'none'; return; }
-  box.style.display = 'block';
+  box.style.display = matches.length ? 'block' : 'none';
   box.innerHTML = matches.slice(0,10).map(n => `
-    <div class="sr-item" onclick="focusNode(${n.id})">
-      <span class="leg-dot" style="background:${getColor(n.type)}"></span>
-      <span>${escapeHTML(n.label)}</span>
+    <div class="sr-item" onclick="focusNode(${n.id})" style="padding:8px; cursor:pointer; font-size:12px; border-bottom:1px solid rgba(255,255,255,0.05);">
+      <span style="color:${COLORS[n.type || 'concept']}">${n.label}</span>
     </div>
   `).join('');
 }
@@ -374,78 +371,76 @@ window.focusNode = function(id) {
   selected = selected === id ? null : id;
   const n = nodeMap[id];
   renderDetail(n || null);
-  document.getElementById('search-results').style.display = 'none';
-  document.getElementById('search').value = '';
+  const sr = document.getElementById('search-results');
+  if(sr) sr.style.display = 'none';
+  const s = document.getElementById('search');
+  if(s) s.value = '';
   if (n && id === selected) {
-    const w = wrap.clientWidth, h = wrap.clientHeight;
-    camX = w/2 - n.x * camZoom;
-    camY = h/2 - n.y * camZoom;
+    const targetCamX = canvas.width/2 - n.x * camZoom;
+    const targetCamY = canvas.height/2 - n.y * camZoom;
+    if(!isNaN(targetCamX) && !isNaN(targetCamY)) {
+        camX = targetCamX; camY = targetCamY;
+    }
   }
 }
 
 function buildLegend() {
-  const types = [...new Set(nodes.map(n => n.type))];
+  const types = [...new Set(nodes.map(n => n.type || 'concept'))];
   const legend = document.getElementById('legend');
-  legend.innerHTML = types.map(ty => `
-    <div class="leg-item ${filterType===ty?'active':''}" onclick="setFilter('${ty}')">
-      <span class="leg-dot" style="background:${getColor(ty)};color:${getColor(ty)}"></span>
-      <span>${ty.toUpperCase()}</span>
-    </div>
-  `).join('') + `
-    <div class="leg-item ${!filterType?'active':''}" onclick="setFilter(null)" style="border-top:1px solid var(--border);padding-top:10px;margin-top:5px">
-      <span>${t('all')}</span>
-    </div>
-  `;
+  if(!legend) return;
+  legend.innerHTML = types.map(ty => {
+    const typeStr = String(ty || 'concept');
+    return `
+      <div class="leg-item ${filterType===typeStr?'active':''}" onclick="setFilter('${typeStr}')">
+        <div class="leg-dot" style="background:${COLORS[typeStr] || '#888'}"></div>
+        ${typeStr.toUpperCase()}
+      </div>
+    `;
+  }).join('');
 }
 
-window.setFilter = function(type) {
-  filterType = filterType === type ? null : type;
-  buildLegend();
-}
+window.setFilter = function(type) { filterType = filterType === type ? null : type; buildLegend(); }
 
 function renderDetail(n) {
   const container = document.getElementById('hud-detail-panel');
   const panel = document.getElementById('node-detail');
-  
-  if (!n) {
-    container.classList.remove('visible');
-    setTimeout(() => { panel.innerHTML = `<div class="detail-empty" id="txt-empty">${t('selectNode')}</div>`; }, 400);
-    return;
-  }
-
-  container.classList.add('visible');
+  if (!n) { if(container) container.classList.remove('visible'); return; }
+  if(container) container.classList.add('visible');
   const neighborIds = getNeighbors(n.id);
   const neighborNodes = nodes.filter(nn => neighborIds.has(nn.id));
-
-  panel.innerHTML = `
-    <div class="detail-name">${escapeHTML(n.label)}</div>
-    <div class="detail-type">
-      <span class="type-dot" style="background:${getColor(n.type)}"></span>
-      ${n.type.toUpperCase()} · ${neighborNodes.length} ${t('edges')}
-    </div>
-    <div class="detail-desc">${escapeHTML(n.desc) || t('noDesc')}</div>
-    
-    <div class="detail-connections">${t('connected')}</div>
-    <div class="conn-list">
-      ${neighborNodes.map(nn => `
-        <div class="conn-item" onclick="focusNode(${nn.id})">
-          <span class="leg-dot" style="background:${getColor(nn.type)}"></span>
-          <span>${escapeHTML(nn.label)}</span>
-        </div>
-      `).join('')}
-    </div>
-  `;
+  if(panel) {
+    panel.innerHTML = `
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px">${n.label}</div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--accent);margin-bottom:12px">TYPE.${(n.type || 'concept').toUpperCase()}</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:20px">${n.desc || t('noDesc')}</div>
+      <div style="font-family:var(--font-mono);font-size:10px;font-weight:800;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:10px">${t('connected')}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${neighborNodes.map(nn => `
+          <div class="item" onclick="focusNode(${nn.id})" style="padding:6px;background:rgba(255,255,255,0.03);border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px">
+            <div class="leg-dot" style="background:${COLORS[nn.type || 'concept'] || '#888'}"></div>
+            ${nn.label}
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
 }
 
 window.fetchBrainJson = function() {
-  fetch('brain.json')
-    .then(r => r.json())
-    .then(data => initBrain(data))
-    .catch(e => {
-      console.error(e);
-      document.getElementById('error-overlay').classList.remove('hidden');
-    });
+  const url = "brain.json?t=" + new Date().getTime();
+  fetch(url).then(r => r.json()).then(data => initBrain(data)).catch(err => {
+      const errOverlay = document.getElementById('error-overlay');
+      if (errOverlay) errOverlay.classList.remove('hidden');
+  });
 }
 
+window.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'k') {
+    e.preventDefault();
+    const s = document.getElementById('search');
+    if(s) s.focus();
+  }
+});
+
 window.addEventListener('DOMContentLoaded', fetchBrainJson);
-window.addEventListener('resize', () => { canvas.width = wrap.clientWidth; canvas.height = wrap.clientHeight; });
+window.addEventListener('resize', handleResize);

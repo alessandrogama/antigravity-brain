@@ -1,91 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Second Brain — Antigravity</title>
-<link rel="stylesheet" href="assets/css/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ANTIGRAVITY BRAIN v1.0</title>
+  <link rel="stylesheet" href="assets/css/style.css">
 </head>
+
 <body>
   <div id="neural-bg"></div>
-  
-  <div id="canvas-wrap">
-    <canvas id="c"></canvas>
-    
-    <!-- Top HUD: Identity & Search -->
-    <div class="hud-top">
-      <div class="glass-panel logo-box">
-        <div class="logo">
-          <div class="logo-dot"></div>
-          <span>Antigravity</span>
-        </div>
-        <div class="hud-stats">
-          <div class="stat"><span id="stat-nodes">0</span> <span class="dim" id="lbl-nodes">nodes</span></div>
-          <div class="stat"><span id="stat-edges">0</span> <span class="dim" id="lbl-edges">edges</span></div>
+  <div class="scanline"></div>
+
+  <!-- TOP STATUS BAR -->
+  <header class="cerebrum-top">
+    <div class="top-left">
+      <div class="logo-dot"></div>
+      <div class="app-name">ANTIGRAVITY BRAIN <span class="version">v1.0</span></div>
+    </div>
+    <div class="top-right">
+      <div class="sync-status">
+        <span class="dim">SYNC STATUS:</span> <span class="status-val">ENCRYPTED</span>
+        <div class="progress-bar">
+          <div class="fill"></div>
         </div>
       </div>
-
-      <div class="glass-panel search-box">
-        <div class="search-inner">
-          <svg class="search-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input type="text" id="search" placeholder="Search knowledge..." oninput="onSearch(this.value)" autocomplete="off">
-        </div>
-        <div id="search-results"></div>
-        <div class="lang-selector">
-          <select id="lang-select" onchange="changeLang(this.value)">
-            <option value="en" selected>EN</option>
-            <option value="es">ES</option>
-            <option value="pt">PT</option>
-          </select>
+      <div class="top-icons">
+        <div class="user-avatar">
+          <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=aless" alt="avatar">
         </div>
       </div>
     </div>
+  </header>
 
-    <!-- Bottom HUD: Legend & Controls -->
-    <div class="hud-bottom">
-      <div class="glass-panel legend-box">
-        <div class="hud-label" id="lbl-legend">FILTER BY TYPE</div>
-        <div class="legend" id="legend">
-          <!-- Dynamically populated -->
+  <div class="app-layout">
+    <!-- SIDEBAR: Vault Style -->
+    <aside class="cerebrum-sidebar">
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+        <input type="text" id="search" placeholder="Search (Ctrl+K)" oninput="onSearch(this.value)">
+      </div>
+      <div id="search-results"></div>
+
+      <div class="sidebar-content">
+        <!-- PROJECTS ONLY -->
+        <div class="vault-section">
+          <div class="section-header" onclick="toggleSection('vault-projects')">
+            <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="3">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            <span id="lbl-vault">PROJECTS</span>
+          </div>
+          <div class="section-body" id="vault-projects">
+            <div id="sub-projects">
+              <!-- Dinamicamente preenchido -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TAGS -->
+        <div class="vault-section">
+          <div class="section-header" onclick="toggleSection('vault-tags')">
+            <svg class="chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="3">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            <span id="lbl-tags">TAGS</span>
+          </div>
+          <div class="section-body" id="vault-tags">
+            <div class="tag-cloud" id="tag-container"></div>
+          </div>
         </div>
       </div>
 
-      <div class="glass-panel controls-box">
-        <div class="controls">
-          <button class="ctrl-btn" onclick="resetView()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-            <span id="btn-reset">Reset</span>
-          </button>
-          <button class="ctrl-btn" onclick="togglePhysics()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            <span id="physics-label">Freeze</span>
-          </button>
-        </div>
+      <div class="sidebar-footer">
+        <div class="stat-line">Nodes: <span id="stat-nodes">0</span></div>
+        <div class="stat-line"><span class="online-dot"></span> Online</div>
       </div>
-    </div>
+    </aside>
 
-    <!-- Right HUD: Detailed Info (Conditional) -->
-    <div class="hud-detail" id="hud-detail-panel">
-      <div class="glass-panel detail-box">
-        <button class="close-detail" onclick="focusNode(null)">×</button>
-        <div id="node-detail">
-          <div class="detail-empty" id="txt-empty">Select a node to explore neural connections</div>
+    <!-- MAIN CANVAS -->
+    <main class="cerebrum-main">
+      <div id="canvas-wrap">
+        <canvas id="c"></canvas>
+
+        <!-- Minimap Widget -->
+        <div class="glass-panel minimap-box">
+          <div class="minimap-header">MINIMAP</div>
+          <div id="minimap-container">
+            <canvas id="minimap-canvas"></canvas>
+            <div id="minimap-viewport"></div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div id="tooltip"></div>
-    <div id="zoom-indicator">100%</div>
+        <!-- Assistant -->
+        <div class="pixel-assistant-wrap">
+          <div class="speech-bubble" id="assistant-text">Analyzing thought patterns...</div>
+          <div class="pixel-avatar">
+            <img src="https://api.dicebear.com/7.x/pixel-art/svg?seed=brainy&backgroundColor=b6e3f4" alt="assistant">
+          </div>
+        </div>
+
+        <!-- Floating Detail Panel -->
+        <div class="hud-detail" id="hud-detail-panel">
+          <div class="glass-panel detail-box">
+            <button class="close-detail" onclick="focusNode(null)">×</button>
+            <div id="node-detail"></div>
+          </div>
+        </div>
+
+        <div class="floating-legend glass-panel">
+          <div id="legend"></div>
+        </div>
+
+        <div id="zoom-indicator">100%</div>
+      </div>
+    </main>
   </div>
+
+  <!-- BOTTOM BAR -->
+  <footer class="cerebrum-footer">
+    <div class="footer-left">
+      <span class="key-hint">Press <span class="key">Ctrl</span> + <span class="key">K</span> for command palette</span>
+      <span class="divider"></span>
+      <span class="dim">Sharing:</span> Private
+    </div>
+    <div class="footer-right">
+      <span class="lang-selector">
+        <select id="lang-select" onchange="changeLang(this.value)">
+          <option value="en" selected>EN</option>
+          <option value="pt">PT</option>
+          <option value="es">ES</option>
+        </select>
+      </span>
+      <span class="divider"></span>
+      <span class="status-item"><span class="online-dot"></span> Local Instance</span>
+      <span class="status-item dim">LATENCY: 12ms</span>
+    </div>
+  </footer>
+
+  <div id="tooltip"></div>
 
   <div id="error-overlay" class="hidden">
     <div class="error-title">CONNECTION LOST</div>
-    <div class="error-sub" id="err-sub1">Could not load brain.json. Make sure the server is running.</div>
-    <button class="ctrl-btn" onclick="location.reload()" style="margin-top:20px">RECONNECT</button>
+    <div class="error-sub" id="msg-error">Verify local Cerebrum instance status.</div>
+    <button class="ctrl-btn" onclick="location.reload()">RECONNECT</button>
   </div>
 
-  <script src="assets/js/script.js"></script>
+  <script src="assets/js/script.js?v=2.3"></script>
 </body>
+
 </html>
